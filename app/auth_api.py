@@ -1,0 +1,436 @@
+
+from rest_framework import status
+from django.http import JsonResponse
+from rest_framework.response import Response
+from django.contrib.auth import authenticate
+from rest_framework.decorators import api_view
+from django.shortcuts import get_object_or_404 ,render, redirect
+from rest_framework.permissions import AllowAny
+from rest_framework.authtoken.models import Token
+from rest_framework.decorators import api_view, permission_classes
+from .models import *
+from .serializer import *
+from .utils import *
+import string
+import random
+from app.auth_ser import *
+
+from .forms import *
+from django.urls import reverse
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
+# from .forms import PasswordResetRequestForm, SetPasswordForm
+# from .forms import *
+# from .models import *
+# from .serializer import *
+# from rest_framework import status
+# from django.http import JsonResponse
+# from rest_framework.response import Response
+# from rest_framework.authtoken.models import Token
+# from django.contrib.auth import login,authenticate,logout
+# from rest_framework.permissions import IsAuthenticated ,AllowAny
+# from django.shortcuts import render, redirect, get_object_or_404
+# from rest_framework.decorators import api_view, permission_classes
+
+from django.conf import settings
+
+message_server_error = "message sending error"
+message_server_error_status = 303
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registration_view(request):
+    if request.method == 'POST':
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        return Response({'error': 'Method Not Allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)       
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_view(request):
+    if request.method == 'POST':
+        phone_number = request.data.get('phone_number')
+        password = request.data.get('password')
+        pin = request.data.get('pin')  
+        user = get_object_or_404(CustomUser,phone_number=phone_number)
+        print(user)
+        if not user.admin:
+            return JsonResponse({"detail" :"you are not allowed to login" },status=403)
+        if user.disable ==True:
+            return JsonResponse({"detail" :"you are not allowed to login" },status=403)
+        user = authenticate(request, phone_number=phone_number, password=password)
+
+        print(user)
+        if user is not None:
+            token =generate_new_token(user)
+            return Response({'token': token.key})
+        else:
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+    else:
+        return Response({'error': 'Method Not Allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_employee(request):
+    if request.method == 'POST':
+        phone_number = request.data.get('phone_number')
+        password = request.data.get('password')
+        pin = request.data.get('pin')  
+        user = get_object_or_404(CustomUser,phone_number=phone_number)
+        if not user:
+            return JsonResponse({"detail" :"you are not registered" },status=403)
+        if user.disable ==True:
+            return JsonResponse({"detail" :"you are not allowed to login" },status=403)
+        user = authenticate(request, phone_number=phone_number, password=password)
+
+        if user is not None:
+            token =generate_new_token(user)
+            return Response({'token': token.key})
+        else:
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+    else:
+        return Response({'error': 'Method Not Allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_with_token_and_pin(request):
+    if request.method == 'POST':
+        token_key = request.data.get('token')
+        pin = request.data.get('pin')
+        try:
+            token = Token.objects.get(key=token_key)
+            user = token.user
+        except Token.DoesNotExist:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if user.disable ==True:
+            return JsonResponse({"detail" :"you are not allowed to login" },status=403)
+       
+        if user.pin == pin:
+            new_token =generate_new_token(user)
+            return Response({'token': new_token.key}, status=status.HTTP_200_OK)
+        else:
+
+            return Response({'error': 'Invalid PIN'}, status=status.HTTP_401_UNAUTHORIZED)
+    else:
+        return Response({'error': 'Method Not Allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_pin(request):
+    if request.method == 'POST':
+        phone_number = request.data.get('phone_number')
+        new_pin = request.data.get('new_pin')
+        otp_entered = request.data.get('otp')
+        if not (phone_number and new_pin and otp_entered):
+            return JsonResponse({'error': 'Phone number, OTP, and new PIN are required in the request'}, status=400)
+  
+
+        user = get_object_or_404(CustomUser, phone_number=phone_number)
+
+      
+        otp_instances = OTP.objects.filter(user=user, otp=otp_entered)
+        if not otp_instances.exists():
+            return JsonResponse({'error': 'Invalid OTP'}, status=400)
+        elif otp_instances.count() > 1:
+
+            otp_instances.delete()
+            return JsonResponse({'error': 'Multiple OTPs found. Please try again.'}, status=400)
+
+        user.pin = new_pin
+        user.save()
+
+        otp_instances.delete()
+
+        return JsonResponse({'message': 'PIN reset successfully'})
+    else:
+        return JsonResponse({'error': 'Method Not Allowed'}, status=405)
+
+
+        
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_otp(request):
+    phone_number = request.data.get('phone_number')
+    pin =request.query_params.get('pin',None)
+    generated_otp = ''.join(random.choices(string.digits, k=4))
+    if pin =="true":
+        msg=f"This is your Mobile PIN Reset OTP {generated_otp} sazutech."  
+    elif pin =="false":
+        msg=f"This is your password Reset OTP {generated_otp} sazutech"
+    else:
+        return JsonResponse({'error': 'Invalid Request'}, status=400)
+
+    if not phone_number:
+        return JsonResponse({'error': 'Phone number is required in the request'}, status=400)
+    
+    user = get_object_or_404(CustomUser, phone_number=phone_number)
+    otp_obj = OTP.objects.filter(user=user)
+    if otp_obj.count:
+        otp_obj.delete()
+    otp_instance = OTP.objects.create(user=user, otp=generated_otp)
+
+    is_send = send_sms(phone_number,msg,templateid=False)
+    if not is_send:
+        return JsonResponse({ 'message': message_server_error},status=message_server_error_status)
+    return JsonResponse({ 'message': 'OTP sent successfully'})
+
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    phone_number = request.data.get('phone_number')
+    otp_entered = request.data.get('otp')
+
+    if not (phone_number and otp_entered):
+        return JsonResponse({'error': 'Phone number and OTP are required in the request'}, status=400)
+
+    user = get_object_or_404(CustomUser, phone_number=phone_number)
+
+    otp_queryset = OTP.objects.filter(user=user).order_by('-created_at')
+
+    try:
+
+        user_otp = otp_queryset.first()
+    except OTP.DoesNotExist:
+        return JsonResponse({'error': 'No OTP object found for the user'}, status=400)
+
+    if otp_entered == user_otp.otp:
+        return JsonResponse({'message': 'OTP verification successful'})
+    else:
+        return JsonResponse({'error': 'Invalid OTP'}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_confirm(request):
+    phone_number = request.data.get('phone_number')
+    otp = request.data.get('otp')
+    new_pin = request.data.get('new_pin')
+
+    new_password = request.data.get('new_password')
+
+    if not (phone_number and otp ):
+        return JsonResponse({'error': 'Phone number, OTP, and new PIN are required in the request'}, status=400)
+
+    user = get_object_or_404(CustomUser, phone_number=phone_number)
+
+    # Check if the user has a valid OTP stored
+    user_otp = OTP.objects.filter(user=user).last()
+    if user_otp is None:
+        return JsonResponse({'error': 'No OTP found for the provided phone number'}, status=400)
+    
+    if(not new_pin and not new_password):
+           return JsonResponse({'error': 'Invalid Request'}, status=400)
+    print(user_otp,user)
+    if otp == user_otp.otp:
+        if new_pin:
+            user.pin = new_pin
+        if new_password :
+            user.set_password(new_password)
+        user.save()
+
+        user_otp.delete()
+
+        return JsonResponse({'message': 'reset  confirm successfully'})
+    else:
+        return JsonResponse({'error': 'Invalid OTP'}, status=400)
+
+   
+
+#    ---------------------------- super admin ------------------------------------------
+
+
+# ----------------- super admin web --------------------------
+
+# UGRADE UDMIN USER TO SUPER USER
+@api_view([ 'PUT'])
+def upgrade_admin_user(request,pk):    
+    user=request.user
+    employee = user.employee if user.employee else None
+    allow,instance,allow_msg= allow_user(request,CustomUser,instance=False,pk=pk)  # CHANGE model
+    if not allow:
+        return JsonResponse({"details" : allow_msg} , status=401)
+    company,company_msg=get_user_company(user)
+    company_id=get_company_id(company)
+
+    user =get_object_or_404(CustomUser,id=pk)
+    serializer = UpgradeUserSerializer(user,data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(status=200)
+    return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+
+
+# ADD BRANCH IN WEB
+@api_view([ 'PUT'])
+def add_branch(request,pk):  
+    user=request.user
+    employee = user.employee if user.employee else None
+    allow,instance,allow_msg= allow_user(request,CustomUser,instance=False,pk=pk)  # CHANGE model
+    if not allow:
+        return JsonResponse({"details" : allow_msg} , status=401)
+    company,company_msg=get_user_company(user)
+    company_id=get_company_id(company)
+
+    user =get_object_or_404(CustomUser,id=pk)
+    # Extract company data
+    company = {
+        'name': request.POST.get('company_name'),
+        'email': request.POST.get('company_email'),
+        'phone': request.POST.get('company_phone'),
+        'address': request.POST.get('company_address'),
+    }
+
+    serializer = BranchCreateSerializer(user,data={**request.POST.dict(),"company" :company})
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data,status=200)
+    return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+@api_view(['GET', 'PUT'])
+def get_me(request):    
+    user=request.user
+    employee = user.employee if user.employee else None
+    allow,instance,allow_msg= allow_user(request,CustomUser,instance=False,pk=False)  # CHANGE model
+    if not allow:
+        return JsonResponse({"details" : allow_msg} , status=401)
+    company,company_msg=get_user_company(user)
+    company_id=get_company_id(company)
+
+    if request.method == 'GET':
+        if user.company:
+             ser = CompanyAdminProfileSerializer(user, many=False)
+        else:
+            ser = AdminOwnerSerializer(user, many=False)
+        return Response(ser.data)
+    elif request.method == 'PUT':
+        request_data = request.data.copy()
+        request_data.pop('password', None)
+        request_data.pop('pin', None)
+        ser = UserSerializer(user, data=request_data, partial=True) 
+        if ser.is_valid():
+            ser.save()
+            return Response(ser.data)
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    else:
+        return JsonResponse({'error': 'Method Not Allowed'}, status=405)
+    
+
+
+# web
+
+
+
+reset_codes = {}
+
+# DEFAULT_FROM_EMAIL = settings.DEFAULT_FROM_EMAIL
+
+
+def password_reset_request_view(request):
+    error={}
+    if request.method == "POST":
+        
+        form = PasswordResetRequestForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            if not email:
+                error['email'] = 'Please Enter Valid Email'
+            user = CustomUser.objects.filter(email=email).first()
+            if user:
+                reset_code = get_random_string(length=6)
+                # reset_codes[email] = reset_code
+                send_password_reset_email(request,email,reset_code)
+                # send_mail(
+                #     "Password Reset",
+                #     f"Your reset code is: {reset_code}",
+                #     settings.DEFAULT_FROM_EMAIL,
+                #     [email],
+                #     fail_silently=False,
+                # )
+                OTP.objects.create(user=user,otp=reset_code)
+                return redirect(reverse("password_reset_confirm"))
+            error['email'] = 'Email id with user not found'
+    else:
+        form = PasswordResetRequestForm()
+    return render(request, "password_reset_request.html", {"form": form,'error':error})
+
+
+
+def password_reset_confirm_view(request):
+    error = {"otp":"","user":""}
+    print(request.method)
+    if request.method == "POST":
+            form = SetPasswordForm(request.POST)
+        # if form.is_valid():
+            print(1)
+            new_password = form.cleaned_data["new_password"]
+            confirm_password = form.cleaned_data["confirm_password"]
+            if new_password != confirm_password : 
+                error['confirm_password'] = "Password does not match"
+                print(2)
+                return render(request, "password_reset_confirm.html", {"form": form,"error":error})
+            code = request.POST.get("code")
+            email = None
+            user = CustomUser.objects.filter(email=email).first()
+            print(3)
+            if user:
+                print(4)
+                otp = OTP.objects.filter(user=user,otp=code)
+                if otp:
+                    user.set_password(new_password)
+                    user.save()
+                    otp.delete()
+                    return redirect(reverse("login"))
+                else:
+                    error['otp'] = "Invalid Code"
+                   
+            else:
+                error['user'] = "User not found"
+        # else:
+        #     print(form.errors)
+                
+    else:
+        print('******************************dddddddddddddddddddddd')
+        form = SetPasswordForm()
+
+    return render(request, "password_reset_confirm.html", {"form": form,'error':error})
+
+
+
+
+import logging
+from django.core.mail import send_mail
+from django.conf import settings
+from django.http import HttpResponse
+
+logger = logging.getLogger("app")
+
+def send_password_reset_email(request, email, reset_code):
+    print('poooooooo')
+    try:
+        send_mail(
+            "Password Reset",
+            f"Your reset code is: {reset_code}",
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=False,
+        )
+        return HttpResponse('Password reset email sent successfully')
+    except Exception as e:
+        logger.error(f'Error sending password reset email to {email}: {e}')
+        return HttpResponse(f'Error sending password reset email: {e}')

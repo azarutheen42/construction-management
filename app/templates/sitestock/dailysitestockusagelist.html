@@ -1,0 +1,560 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block header2 %}
+<!-- Begin page -->
+<div id="layout-wrapper">
+
+	<div class="main-content">
+
+		<div class="page-content">
+			<div class="container-fluid">
+
+				<!-- start page title -->
+				<div class="row">
+					<div class="col-12">
+						<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+							<h4 class="mb-sm-0">Daily Site Stock Usage Management</h4>
+
+							<div class="page-title-right">
+								<ol class="breadcrumb m-0">
+									<li class="breadcrumb-item"><a href="javascript: void(0);">Dashboard</a></li>
+									<li class="breadcrumb-item active">daily Site Stock Usage</li>
+								</ol>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="row">
+					<div class="col-lg-12">
+						<div class="card">
+							<div class="card-header">
+
+								<div class="row">
+									<div class="col-xl-6 col-lg-6 col-md-6 col-12">
+										<h2>Daily Site Stock Usage List </h2>
+									</div>
+									<div class="col-xl-4 col-lg-4 col-md-4 col-12"></div>
+									<div class="col-xl-2 col-lg-2 col-md-2 col-12">
+										<a href="{% url 'dailysitestockusage' %}" type="button" class="btn btn-info"
+											style="float:right;">Stock Update</a>
+
+									</div>
+									<div class="card-body">
+										<div class="row">
+											<div class="col-md-4 mb-3 mt-4" >
+												<label for="project" class="form-label"> Project :</label>
+												<select class="form-select" id="project" name="project">
+													<!-- <option value="-1"> All </option> -->
+													<option value="0">All</option>
+
+													{% for project in projects %}
+
+													<option value="{{ project.id }}">{{ project.proj_name }}</option>
+
+													{% endfor %}
+												</select>
+												<span id="projectError" class="error-message"></span>
+											</div>
+
+											<!-- Subcontractor Dropdown -->
+											<div class="col-md-4 mb-3 mt-4" >
+												<label for="subcontract" class="form-label">Subcontract:</label>
+												<select class="form-select" id="subcontract" name="subcontract">
+
+													<option value="0" selected>--------</option>
+
+													{% for subcontract in subcontracts %}
+
+
+												{% endfor %}
+											</select>
+											<span id="subcontractError" class="error-message"></span>
+										</div>
+										<div class="col-xl-3 col-lg-3 col-md-3 col-xs-6 col-12">
+											<br><br>
+												<button type="submit" onclick="getReport(this,'example')"
+												class="btn btn-primary waves-effect waves-light mt-2">Get Report
+											</button>
+											
+										</div>
+										<hr>
+										<table id="example"
+											class="table table-bordered dt-responsive nowrap table-striped align-middle"
+											style="width:100%">
+											<thead>
+												<tr>
+
+													<th data-ordering="false">S No.</th>
+													<th data-ordering="false">Item name</th>
+													<th data-ordering="false">Qty</th>
+													<th data-ordering="false">Project</th>
+													<th data-ordering="false">Subcontract</th>
+													<th data-ordering="false">Unit</th>
+													<th data-ordering="false">Action</th>
+
+												</tr>
+											</thead>
+											<tbody>
+
+											</tbody>
+
+										</table>
+
+
+										<div id="results-container"></div>
+										<div id="pagination-container"></div>
+
+
+
+									</div>
+								</div>
+							</div>
+						</div>
+						<!-- container-fluid -->
+					</div>
+					<!-- End Page-content -->
+
+
+				</div>
+				<!-- end main content-->
+
+			</div>
+			<!-- END layout-wrapper -->
+
+
+
+			<div class="modal fade bs-example-modal-lg1" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel"
+				aria-hidden="true" id="stockHistoryModal">
+				<div class="modal-dialog modal-lg">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title" id="myLargeModalLabel"> </h5>
+							<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+						</div>
+						<div class="modal-body">
+							<form id="editForm">
+								<div class="row">
+									<div class="row">
+										<div class="col-4">
+											<label for="item_name" class="form-label">Item Name</label>
+											<input type="text" id="eitem" class="form-control" name="item" value="">
+										</div>
+										<div class="col-4 ">
+											<label for="" class="form-label"> Qty</label>
+											<input type="text" class="form-control" name="qty" value="">
+										</div>
+
+										<div class="col-4">
+											<label for="unit" class="form-label">Unit</label>
+											<input type="text" id="eunit" class="form-control" name="unit" value=""
+												disabled>
+										</div>
+
+										<div class="col-4 mt-2">
+											<label for="project" class="form-label">Project:</label>
+											<select class="form-select" id="eproject" name="project">
+
+												<option value="">--------</option>
+
+												{% for project in projects %}
+												<!--  -->
+												<option value="{{ project.id }}">{{ project.proj_name }}</option>
+
+												{% endfor %}
+											</select>
+											<span id="projectError" class="error-message"></span>
+										</div>
+
+										<div class="col-4 mt-2">
+											<label for="subcontract" class="form-label">Subcontract:</label>
+											<select class="form-select" id="esubcontract" name="subcontract">
+
+												<option value="">--------</option>
+
+												{% for subcontract in subcontracts %}
+
+												<option value="{{ subcontract.id }}">
+													{{ subcontract.display_contractor_dropdown }}</option>
+
+												{% endfor %}
+											</select>
+											<span id="subcontractError" class="error-message"></span>
+										</div>
+
+									</div>
+								</div>
+							</form>
+
+						</div>
+						<div class="modal-footer">
+							<button class="btn btn-link link-success fw-medium shadow-none" data-bs-dismiss="modal"><i
+									class="ri-close-line me-1 align-middle"></i> Close</button>
+							<button type="button" id="stockModal" class="btn btn-primary"
+								onclick="updateHistory(this)">Save</button>
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
+		<!--start back-to-top-->
+		<button onclick="topFunction()" class="btn btn-danger btn-icon" id="back-to-top">
+			<i class="ri-arrow-up-line"></i>
+		</button>
+		<!--end back-to-top-->
+
+		<!--preloader-->
+		<div id="preloader">
+			<div id="status">
+				<div class="spinner-border text-primary avatar-sm" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+		</div>
+
+
+		<script>
+
+			const existingPaginationContainer = document.getElementById('pagination-container');
+
+			const dropdown = document.getElementById('project');
+			const dropdown2 = document.getElementById('subcontract');
+			const tableBody = document.querySelector('#example tbody');
+
+
+			// // from and to
+			// const fromdate = document.getElementById('fromdate');
+			// const todate = document.getElementById('todate');
+
+			// var qtyError = false;
+
+			// var priceError = false;
+
+			var currentPage = 1;
+
+			document.addEventListener('DOMContentLoaded', function () {
+
+				// const dropdown = document.getElementById('fromsite');
+				// const tableBody = document.querySelector('#example tbody');
+
+				// on dom loaded 
+				const initialSelectedValue = dropdown.value;
+				fetchData(1);
+
+				// fetch table data API
+				dropdown.addEventListener('change', function () {
+
+					fetchData(currentPage);
+				});
+
+				dropdown2.addEventListener('change', function () {
+
+					fetchData(currentPage);
+				});
+
+				// todate.addEventListener('change', function () {
+
+				// 	fetchData(currentPage);
+				// });
+
+				// fromdate.addEventListener('change', function () {
+
+				// 	fetchData(currentPage);
+				// });
+
+			});
+
+
+			// fetch data
+			function fetchData(page) {
+
+				const selectedValue = dropdown.value;
+				const subcontract = dropdown2.value;
+				// const from = fromdate?.value || ""
+				// const to = todate?.value || ""
+				// console.log(fromdate ,todate)
+				try {
+					fetch(`/dailysitestockusagelist/${selectedValue}/?page=${page}&subcontract=${subcontract}`)
+						.then(response => {
+							if (response.ok) {
+								console_log('Data fetched');
+								return response.json();
+							} else {
+								throw new Error(`HTTP error! Status: ${response.status}`);
+							}
+						})
+						.then(data => {
+							tableBody.innerHTML = '';
+							renderDataOrMessage(tableBody, data, page)
+						})
+						.catch(error => {
+							console.error('Error fetching data:', error);
+							showToast(errorAlertMessage?.message, '', errorAlertMessage?.bgColor);
+						});
+				} catch (error) {
+					console.error('Error in fetch operation:', error);
+				}
+			}
+
+
+
+			// render table or message
+
+			function renderDataOrMessage(data, page) {
+				alert()
+				if (data && Array.isArray(data.results) && data.results.length > 0) {
+					data.results.forEach((item, index) => {
+						const newRow = createTableRow(index + 1, item);
+						tableBody.appendChild(newRow);
+					});
+					renderPagination(data, page);
+				} else {
+					tableBody.innerHTML = '<tr><td colspan="6">No data available.</td></tr>';
+					existingPaginationContainer.innerHTML = '';
+				}
+			}
+
+
+			// populate table data
+			function createTableRow(serialNumber, data) {
+				console_log("hdgjsg")
+				const newRow = document.createElement('tr');
+
+				const serialCell = document.createElement('td');
+				serialCell.textContent = serialNumber;
+				newRow.appendChild(serialCell);
+
+				const itemNameCell = document.createElement('td');
+				itemNameCell.textContent = get_value(data.item_name);
+				newRow.appendChild(itemNameCell);
+
+				const qtyCell = document.createElement('td');
+				qtyCell.textContent = get_value(data.qty);
+				newRow.appendChild(qtyCell);
+
+				const project_nameCell = document.createElement('td');
+				project_nameCell.textContent = get_value(data.project_name);
+				newRow.appendChild(project_nameCell);
+
+				const subcontract_nameCell = document.createElement('td');
+				subcontract_nameCell.textContent = get_value(data.subcontract_name);
+				newRow.appendChild(subcontract_nameCell);
+
+				const unit_nameCell = document.createElement('td');
+				unit_nameCell.textContent = get_value(data.unit_name);
+				newRow.appendChild(unit_nameCell);
+
+				const actionCell = document.createElement('td');
+
+				actionCell.innerHTML = ` <button class="btn btn-soft-secondary btn-sm dropdown" type="button" onclick="openCustomDataModal('stockHistoryModal')" >
+							<i class="ri-eye-fill align-middle"></i>
+			 				</button>`
+
+
+				newRow.appendChild(actionCell);
+
+
+				actionCell.addEventListener('click', () => {
+
+					populateModalData(data)
+				});
+
+				return newRow;
+			}
+
+			// populate data in modal
+			function populateModalData(data) {
+				const formId = 'editForm'
+				var formElement = document.getElementById(formId);
+
+				// modalheader.innerText = `${data.labour_name} details`
+
+				const I1 = formElement.querySelector('input[name="qty"]')
+				I1.value = data.qty;
+
+				const I2 = formElement.querySelector('input[name="item"]')
+				I2.value = data.item_name;
+
+				const I3 = formElement.querySelector('select[name="project"]')
+				I3.value = data.project
+				const projectOption = I3.querySelector(`option[value="${data.project}"]`);
+				if (projectOption) {
+					projectOption.selected = true;
+				}
+
+
+				const I4 = formElement.querySelector('input[name="unit"]')
+				I4.value = data.unit_name;
+
+				// const I5 = formElement.querySelector('select[name="subcontract_name"]')
+				// I5.selected = data.subcontract;
+
+				const I5 = formElement.querySelector('select[name="subcontract"]');
+				I5.value = data.subcontract
+				const selectedOption = I5.querySelector(`option[value="${data.subcontract}"]`);
+				if (selectedOption) {
+					selectedOption.selected = true;
+				}
+
+				const saveButton = document.querySelector('#stockModal');   //id change
+				saveButton.setAttribute("data-id", data.id)
+
+
+
+			}
+
+
+
+
+
+			// update api call
+
+
+
+			function updateHistory(button) {
+
+				var modalSelector = button.getAttribute('data-target');
+				const formId = "editForm"
+
+				const saveId = button.getAttribute('data-id')
+				var formElement = document.getElementById(formId);
+
+				var formData = new FormData();
+				try {
+					disableButton(button);
+					var isValid = true;
+					var errors = {};
+					var formData = new FormData();
+
+					var requiredKeys = [];   //changes
+					console_log(formElement)
+
+					const subcontract_name = getValueOrDefault(formElement.querySelector('select[name="subcontract"]').value);
+					const project_name = getValueOrDefault(formElement.querySelector('select[name="project"]').value);
+					const qty = getValueOrDefault(formElement.querySelector('input[name="qty"]').value);
+					const unit_name = getValueOrDefault(formElement.querySelector('input[name="unit"]').value);
+					const item_name = getValueOrDefault(formElement.querySelector('input[name="item"]').value);
+
+
+
+					// if (subcontract_name) {
+					// 	formData.append('subcontract', subcontract_name);
+					// }
+
+					if (project_name) {
+						formData.append('project', project_name);
+					}
+
+					// if (unit_name) {
+					// 	formData.append('unit', unit_name);
+
+					// }
+					if (qty) {
+						formData.append('qty', qty);
+
+					}
+					if (item_name) {
+						formData.append('item', item_name);
+
+					}
+
+
+
+
+					requiredKeys.forEach(function (key) {
+						var value = formData.get(key);
+						if (!value.trim()) {
+							isValid = false;
+							errors[key] = ['This field is required.'];
+						}
+					});
+
+					if (!isValid) {
+						enableButton(button);
+						// console.log(errors);
+						handleCreateErrors(errors);
+						return;
+					} else {
+						$(`#${formId} input, #${formId} button`).prop('disabled', true);
+
+					}
+
+					$.ajax({
+						url: `/update_sitestockusage/${saveId}/`,                //change
+						type: 'PUT',
+						headers: {
+							'X-CSRFToken': csrftoken,
+						},
+						data: formData,
+						processData: false,
+						contentType: false,
+						success: function (response, status, xhr) {
+							console.error(status);
+							if (xhr.status === 200) {
+
+								showToast(successMesssage?.message, '', successMesssage?.bgColor);
+								fetchData(currentPage, reload = true)
+								closeHistoryModal(modalSelector)
+								// restoreForm(formId, button)
+
+							} else {
+
+								// restoreForm(formId, button)
+								showToast(
+									errorAlertMessage?.message,
+									"",
+									errorAlertMessage?.bgColor
+								);
+
+							}
+						},
+						error: function (xhr, status, error) {
+							// console.log(xhr, status, error);
+							if (xhr.status === 400) {
+								if (xhr?.responseJSON || xhr?.responseJSON?.errors) {
+									handleCreateErrors(transformErrors(xhr.responseJSON));
+									// restoreForm(formId, button)
+
+
+								} else {
+									showToast(errorAlertMessage?.message, '', errorAlertMessage?.bgColor);
+									// restoreForm(formId, button)
+
+								}
+							}
+							else if (xhr.status === 401 || xhr.status === 404) {
+
+								showToast(xhr?.responseJSON?.details || errorOccured.message, '', errorAlertMessage?.bgColor);
+								// restoreForm(formId, button)
+
+
+							}
+							else {
+								showToast(errorAlertMessage?.message, '', errorAlertMessage?.bgColor);
+								// restoreForm(formId, button)
+
+							}
+						}
+					});
+				} catch (error) {
+					showToast(errorOccured?.message, '', errorOccured?.bgColor);
+					// restoreForm(formId, button)
+					console.error(error);
+				}
+				finally {
+					restoreForm(formId, button)
+				}
+
+			}
+
+
+
+
+		</script>
+
+
+		{% endblock header2 %}
